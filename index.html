@@ -1,0 +1,1245 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Famiglia">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14161a" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<title>Calendario di famiglia</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --text: #1d2129; --muted: #6b7280;
+    --line: #e3e6eb; --holiday: #d23b3b; --accent: #2563eb; --alert: #dc2626;
+    --alert-bg: #fef2f2;
+    --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a; --surface: #1e2127; --text: #eceef2; --muted: #9aa1ad;
+      --line: #2c3038; --holiday: #ff6b6b; --accent: #60a5fa; --alert: #f87171;
+      --alert-bg: #3a1d1f;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: env(safe-area-inset-top) 10px calc(env(safe-area-inset-bottom) + 16px);
+    max-width: 560px; margin: 0 auto;
+    -webkit-user-select: none; user-select: none;
+  }
+  [hidden] { display: none !important; }
+  button { font: inherit; }
+  input, select, textarea {
+    font: inherit; font-size: 16px; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px;
+    -webkit-user-select: text; user-select: text;
+  }
+  input[type=color] { padding: 2px; width: 40px; height: 38px; }
+  textarea { width: 100%; min-height: 70px; resize: vertical; }
+
+  /* Schermate di accesso */
+  .screen { padding-top: 12vh; }
+  .screen h1 { font-size: 24px; margin: 0 0 6px; }
+  .screen p { color: var(--muted); margin: 0 0 18px; line-height: 1.4; }
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+  .btn {
+    border: none; border-radius: 12px; padding: 13px; font-size: 16px; font-weight: 700;
+    cursor: pointer; background: var(--bg); color: var(--text);
+  }
+  .btn.pri { background: var(--accent); color: #fff; }
+  .btn.ghost { background: none; color: var(--accent); padding: 8px; font-weight: 600; }
+  .btn.danger { background: none; color: var(--alert); }
+  .err { color: var(--alert); font-size: 14px; min-height: 18px; }
+  .sep { text-align: center; color: var(--muted); font-size: 13px; margin: 14px 0; }
+
+  /* Header */
+  header { display: flex; align-items: center; gap: 6px; padding: 12px 0 8px; }
+  .nav-btn, .icon-btn {
+    border: none; background: var(--surface); color: var(--text);
+    width: 40px; height: 40px; border-radius: 12px; font-size: 19px;
+    box-shadow: var(--shadow); cursor: pointer; display: grid; place-items: center; flex: none;
+  }
+  .nav-btn:active, .icon-btn:active { transform: scale(.95); }
+  .icon-btn.active { background: var(--accent); color: #fff; }
+  .title { flex: 1; text-align: center; cursor: pointer; min-width: 0; }
+  .title h1 { margin: 0; font-size: 20px; font-weight: 700; text-transform: capitalize; }
+  .title small { color: var(--muted); font-size: 11px; }
+
+  .banner {
+    background: #fff3cd; color: #7a5b00; border-radius: 10px; padding: 8px 12px;
+    font-size: 13px; margin-bottom: 8px; line-height: 1.35;
+  }
+
+  .filters { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 8px; scrollbar-width: none; }
+  .filters::-webkit-scrollbar { display: none; }
+  .fchip {
+    flex: none; display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--text);
+    border-radius: 999px; padding: 5px 11px 5px 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .fchip i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .fchip.off { opacity: .4; text-decoration: line-through; }
+
+  /* Calendario */
+  .weekdays, .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .weekdays div { text-align: center; font-size: 12px; font-weight: 600; color: var(--muted); padding: 3px 0; }
+  .weekdays div:last-child { color: var(--holiday); }
+  .cell {
+    position: relative; aspect-ratio: 1 / 1.25;
+    background: var(--surface); border-radius: 9px; border: 1px solid var(--line);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; overflow: hidden; transition: transform .08s;
+  }
+  .cell:active { transform: scale(.94); }
+  .cell.empty { background: transparent; border: none; cursor: default; }
+  .cell .num { position: absolute; top: 3px; left: 5px; font-size: 12px; font-weight: 600; opacity: .85; }
+  .cell.holiday .num { color: var(--holiday); opacity: 1; }
+  .cell.has-shift.holiday .num { color: inherit; text-decoration: underline; }
+  .cell .code { font-size: 19px; font-weight: 800; margin-top: 2px; }
+  .cell .lbl { font-size: 8.5px; font-weight: 600; opacity: .85; max-width: 100%; padding: 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cell .note-txt {
+    font-size: 9px; font-weight: 700; line-height: 1.15; padding: 0 3px; text-align: center;
+    max-width: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; word-break: break-word;
+  }
+  .cell.only-note .note-txt { -webkit-line-clamp: 3; color: var(--text); margin-top: 6px; }
+  .cell .dots {
+    position: absolute; bottom: 4px; left: 0; right: 0;
+    display: flex; justify-content: center; gap: 3px;
+  }
+  .cell .dots i { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--surface); }
+  .cell.today { outline: 2.5px solid var(--accent); outline-offset: 1px; }
+  .cell.alert { box-shadow: inset 0 0 0 2.5px var(--alert); }
+  .cell .warn { position: absolute; top: 1px; right: 3px; font-size: 11px; }
+
+  .card { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); padding: 12px 14px; margin-top: 12px; }
+  .card h2 { font-size: 12px; margin: 0 0 8px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+  .card.alert-card { border: 1.5px solid var(--alert); }
+  .card.alert-card h2 { color: var(--alert); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; gap: 6px; padding: 5px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .chip b { font-weight: 800; }
+  .list { list-style: none; margin: 0; padding: 0; }
+  .list li { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; cursor: pointer; }
+  .list li:first-child { border-top: none; }
+  .list .d { font-weight: 700; min-width: 52px; color: var(--muted); }
+  .list .t { flex: 1; white-space: pre-wrap; word-break: break-word; }
+  .muted { color: var(--muted); font-size: 13px; }
+
+  /* Sheets */
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 10; }
+  .backdrop.open { opacity: 1; pointer-events: auto; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; max-width: 560px; margin: 0 auto;
+    background: var(--surface); border-radius: 20px 20px 0 0;
+    padding: 10px 16px calc(env(safe-area-inset-bottom) + 16px);
+    transform: translateY(105%); transition: transform .25s ease;
+    box-shadow: 0 -8px 30px rgba(0,0,0,.2); max-height: 90vh; overflow-y: auto;
+  }
+  .sheet.top { z-index: 12; }
+  .sheet.open { transform: translateY(0); }
+  .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 10px; }
+  .sheet h3 { margin: 0 0 12px; font-size: 18px; text-transform: capitalize; }
+  .sheet h4 { margin: 18px 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .shift-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .shift-btn {
+    border: 2px solid transparent; border-radius: 12px; padding: 9px 2px; font-size: 12px; font-weight: 700;
+    cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  }
+  .shift-btn .c { font-size: 19px; font-weight: 800; }
+  .shift-btn.sel { border-color: var(--text); transform: scale(1.03); }
+  .clear-btn {
+    margin-top: 8px; width: 100%; padding: 9px; border-radius: 12px; border: 1px dashed var(--line);
+    background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .clear-btn.sel { border-style: solid; border-color: var(--text); color: var(--text); }
+  .field-lbl { display: block; margin: 12px 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .actions { display: flex; gap: 10px; margin-top: 16px; }
+  .actions .btn { flex: 1; }
+
+  .issue { background: var(--alert-bg); border-left: 4px solid var(--alert); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; font-size: 14px; }
+  .issue b { color: var(--alert); }
+  .issue div { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+  .item { display: flex; gap: 10px; align-items: stretch; padding: 9px 0; border-top: 1px solid var(--line); cursor: pointer; }
+  .item:first-child { border-top: none; }
+  .item .bar { width: 5px; border-radius: 3px; flex: none; }
+  .item .time { width: 78px; flex: none; font-size: 13px; font-weight: 700; }
+  .item .body { flex: 1; min-width: 0; }
+  .item .body .tt { font-weight: 600; font-size: 15px; word-break: break-word; }
+  .item .body .ss { font-size: 12px; color: var(--muted); }
+  .add-btn { width: 100%; margin-top: 8px; padding: 11px; border-radius: 12px; border: 1px dashed var(--accent); color: var(--accent); background: none; font-weight: 700; cursor: pointer; }
+
+  .pchips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pchip { border: 2px solid var(--line); background: var(--bg); color: var(--text); border-radius: 999px; padding: 6px 12px; font-weight: 600; font-size: 14px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  .pchip i { width: 10px; height: 10px; border-radius: 50%; }
+  .pchip.sel { border-color: currentColor; background: var(--surface); }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row > * { min-width: 0; }
+  .row input[type=time], .row input[type=date] { flex: 1; }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .preset { border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 8px; padding: 5px 9px; font-size: 13px; cursor: pointer; }
+  .wd { display: flex; gap: 4px; flex-wrap: wrap; }
+  .wd button { border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 8px; padding: 6px 0; width: 40px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .wd button.sel { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 15px; }
+  .check input { width: 20px; height: 20px; }
+
+  .set-row { display: flex; gap: 6px; align-items: center; padding: 6px 0; }
+  .set-row input[type=text] { flex: 1; min-width: 0; }
+  .set-row select { width: 104px; flex: none; }
+  .set-row input[type=time], .row input[type=time], .row input[type=date] { width: 0; flex: 1; min-width: 0; }
+  .set-row .x { border: none; background: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 4px 6px; }
+  .win { border: 1px solid var(--line); border-radius: 12px; padding: 8px; margin-bottom: 8px; }
+  .code-box { font-family: ui-monospace, Menlo, monospace; font-size: 15px; background: var(--bg); padding: 10px; border-radius: 10px; word-break: break-all; -webkit-user-select: all; user-select: all; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+
+  /* Pennello */
+  body.quick .grid { touch-action: none; }
+  body.quick #app { padding-bottom: 150px; }
+  .brushbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 9; max-width: 560px; margin: 0 auto;
+    background: var(--surface); border-radius: 18px 18px 0 0; box-shadow: 0 -6px 24px rgba(0,0,0,.18);
+    padding: 10px 12px calc(env(safe-area-inset-bottom) + 12px);
+    transform: translateY(110%); transition: transform .22s ease;
+  }
+  body.quick .brushbar { transform: translateY(0); }
+  body:not(.quick) .brushbar { box-shadow: none; visibility: hidden; transition: transform .22s ease, visibility 0s .22s; }
+  .brushbar .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 8px; }
+  .brushbar .top span { font-size: 13px; color: var(--muted); }
+  .brushbar .top button { border: none; background: var(--accent); color: #fff; font-weight: 700; padding: 7px 14px; border-radius: 10px; font-size: 14px; cursor: pointer; flex: none; }
+  .brush-grid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 5px; }
+  .brush { border: 2px solid transparent; border-radius: 10px; padding: 8px 0; font-size: 17px; font-weight: 800; cursor: pointer; }
+  .brush.eraser { background: var(--bg); color: var(--muted); font-size: 16px; }
+  .brush.sel { border-color: var(--text); transform: scale(1.08); }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 24px);
+    transform: translateX(-50%) translateY(20px); opacity: 0; background: var(--text); color: var(--bg);
+    padding: 10px 16px; border-radius: 10px; font-size: 14px; transition: all .2s; z-index: 30; pointer-events: none;
+    max-width: 90vw; text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .loading { padding-top: 30vh; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div id="loading" class="loading">Caricamento…</div>
+
+<!-- Accesso -->
+<div id="authScreen" class="screen" hidden>
+  <h1>Calendario di famiglia</h1>
+  <p>Accedi con il tuo account. Se è la prima volta, crea un account con email e password.</p>
+  <div class="stack">
+    <input id="authEmail" type="email" placeholder="Email" autocomplete="email">
+    <input id="authPass" type="password" placeholder="Password (almeno 6 caratteri)" autocomplete="current-password">
+    <div class="err" id="authErr"></div>
+    <button class="btn pri" id="loginBtn">Accedi</button>
+    <button class="btn" id="signupBtn">Crea account</button>
+    <button class="btn ghost" id="resetBtn">Password dimenticata?</button>
+  </div>
+</div>
+
+<!-- Scelta famiglia -->
+<div id="setupScreen" class="screen" hidden>
+  <h1>La tua famiglia</h1>
+  <p>Il primo di voi crea la famiglia. L'altro inserisce il codice che trova nel menu ⋯ dell'app.</p>
+  <div class="stack">
+    <input id="famName" type="text" placeholder="Nome (es. Casa Rossi)">
+    <button class="btn pri" id="createFamBtn">Crea una nuova famiglia</button>
+  </div>
+  <div class="sep">oppure</div>
+  <div class="stack">
+    <input id="joinCode" type="text" placeholder="Codice famiglia">
+    <button class="btn" id="joinBtn">Unisciti con il codice</button>
+    <div class="err" id="setupErr"></div>
+    <button class="btn ghost" id="setupLogout">Esci</button>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app" hidden>
+  <header>
+    <button class="nav-btn" id="prev" aria-label="Mese precedente">‹</button>
+    <div class="title" id="title"><h1 id="monthLabel"></h1><small>tocca per tornare a oggi</small></div>
+    <button class="nav-btn" id="next" aria-label="Mese successivo">›</button>
+    <button class="icon-btn" id="quickBtn" aria-label="Inserimento rapido turni">🖌️</button>
+    <button class="icon-btn" id="menuBtn" aria-label="Menu">⋯</button>
+  </header>
+  <div class="banner" id="banner" hidden></div>
+  <div class="filters" id="filters"></div>
+  <div class="weekdays"><div>Lun</div><div>Mar</div><div>Mer</div><div>Gio</div><div>Ven</div><div>Sab</div><div>Dom</div></div>
+  <div class="grid" id="grid"></div>
+
+  <div class="card alert-card" id="issuesCard" hidden>
+    <h2>⚠️ Da organizzare</h2>
+    <ul class="list" id="issuesList"></ul>
+  </div>
+  <div class="card" id="summaryCard">
+    <h2 id="summaryTitle">Turni del mese</h2>
+    <div class="chips" id="summary"></div>
+  </div>
+  <div class="card" id="notesCard" hidden>
+    <h2>Note sui turni</h2>
+    <ul class="list" id="notesList"></ul>
+  </div>
+</div>
+
+<div class="backdrop" id="backdrop"></div>
+<div class="sheet" id="daySheet" role="dialog" aria-modal="true"></div>
+<div class="sheet top" id="itemSheet" role="dialog" aria-modal="true"></div>
+<div class="sheet" id="menuSheet" role="dialog" aria-modal="true"></div>
+
+<div class="brushbar" id="brushbar">
+  <div class="top"><span id="brushHint">Scegli un turno, poi tocca o trascina sui giorni</span><button id="quickDone">Fine</button></div>
+  <div class="brush-grid" id="brushGrid"></div>
+</div>
+<input type="file" id="fileInput" accept="application/json,.json" hidden>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+// =====================================================================
+//  CONFIGURAZIONE FIREBASE
+//  Lascia null per usare la "modalità prova" (dati solo su questo telefono).
+//  Per la versione condivisa incolla qui l'oggetto copiato dalla console
+//  Firebase (vedi LEGGIMI.md), ad esempio:
+//
+//  const FIREBASE_CONFIG = {
+//	apiKey: "AIzaSyD2qBVSiKvdiHb5GCrzHNoPoRMPk3apLVM",
+//	authDomain: "calendario-famiglia-1173a.firebaseapp.com",
+//	projectId: "calendario-famiglia-1173a",
+//	storageBucket: "calendario-famiglia-1173a.firebasestorage.app",
+//	messagingSenderId: "64744759923",
+//	appId: "1:64744759923:web:4030984cce752de5538006"
+//  };
+// =====================================================================
+const FIREBASE_CONFIG = null;
+const FB_VERSION = "10.12.2";
+
+// ---------------- Costanti ----------------
+const SHIFTS = [
+  { id: "M", label: "Mattina",    bg: "#FDE68A", fg: "#713F12" },
+  { id: "P", label: "Pomeriggio", bg: "#FDBA74", fg: "#7C2D12" },
+  { id: "N", label: "Notte",      bg: "#4F46E5", fg: "#FFFFFF" },
+  { id: "S", label: "Smonto",     bg: "#A5B4FC", fg: "#1E1B4B" },
+  { id: "R", label: "Riposo",     bg: "#86EFAC", fg: "#14532D" },
+  { id: "F", label: "Ferie",      bg: "#F9A8D4", fg: "#831843" },
+  { id: "C", label: "Corsi",      bg: "#67E8F9", fg: "#164E63" },
+  { id: "A", label: "Altro",      bg: "#CBD5E1", fg: "#1E293B" }
+];
+const SHIFT_BY_ID = Object.fromEntries(SHIFTS.map(s => [s.id, s]));
+const TIMED_SHIFTS = ["M", "P", "N", "C"];
+const MONTHS = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
+const DAYS = ["domenica","lunedì","martedì","mercoledì","giovedì","venerdì","sabato"];
+const WD_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const WD_SHORT = { 1: "Lun", 2: "Mar", 3: "Mer", 4: "Gio", 5: "Ven", 6: "Sab", 0: "Dom" };
+const ROLES = { adult: "Adulto", child: "Figlio/a", family: "Famiglia" };
+const PALETTE = ["#e11d48", "#2563eb", "#16a34a", "#d97706", "#9333ea", "#0891b2", "#db2777", "#4b5563"];
+
+function defaultFamily() {
+  return {
+    name: "La nostra famiglia",
+    people: [
+      { id: "lei",      name: "Lei",      color: "#e11d48", role: "adult" },
+      { id: "stefano",  name: "Stefano",  color: "#2563eb", role: "adult" },
+      { id: "figlio1",  name: "Figlio 1", color: "#16a34a", role: "child" },
+      { id: "figlio2",  name: "Figlio 2", color: "#d97706", role: "child" },
+      { id: "famiglia", name: "Famiglia", color: "#9333ea", role: "family" }
+    ],
+    settings: {
+      shiftPerson: "lei",
+      shiftHours: { M: ["06:00", "14:00"], P: ["14:00", "22:00"], N: ["22:00", "06:00"], C: ["08:00", "17:00"] },
+      windows: [{ id: "w1", label: "Notte", start: "22:00", end: "06:00", days: [0, 1, 2, 3, 4, 5, 6] }]
+    }
+  };
+}
+
+// ---------------- Utilità ----------------
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, "0");
+const keyOf = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
+const dayNum = key => { const [y, m, d] = key.split("-").map(Number); return Math.round(Date.UTC(y, m - 1, d) / 864e5); };
+const keyFromNum = n => { const t = new Date(n * 864e5); return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`; };
+const dowOfNum = n => new Date(n * 864e5).getUTCDay();
+const toMin = t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+const fromMin = m => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
+function span(n, start, end) { const s = n * 1440 + toMin(start); let e = n * 1440 + toMin(end); if (e <= s) e += 1440; return [s, e]; }
+const rid = () => Math.random().toString(36).slice(2, 10);
+const clean = o => JSON.parse(JSON.stringify(o));
+const ls = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "style") el.style.cssText = v;
+    else if (k === "value" || k === "checked") el[k] = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()) {
+    if (c == null || c === false) continue;
+    el.append(c.nodeType ? c : document.createTextNode(String(c)));
+  }
+  return el;
+}
+
+function easter(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4,
+    f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), hh = (19 * a + b - d - g + 15) % 30,
+    i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - hh - k) % 7, m = Math.floor((a + 11 * hh + 22 * l) / 451),
+    month = Math.floor((hh + l - 7 * m + 114) / 31) - 1, day = ((hh + l - 7 * m + 114) % 31) + 1;
+  return new Date(y, month, day);
+}
+const holidayCache = {};
+function holidays(y) {
+  if (holidayCache[y]) return holidayCache[y];
+  const set = new Set(["01-01","01-06","04-25","05-01","06-02","08-15","11-01","12-08","12-25","12-26"].map(md => `${y}-${md}`));
+  const e = easter(y);
+  set.add(keyOf(y, e.getMonth(), e.getDate()));
+  const em = new Date(y, e.getMonth(), e.getDate() + 1);
+  set.add(keyOf(em.getFullYear(), em.getMonth(), em.getDate()));
+  return (holidayCache[y] = set);
+}
+
+let toastTimer;
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+// ---------------- Archivio dati ----------------
+// Stato comune: { family: {name, people, settings}, days: {key: {shifts: {pid: {s, n}}}}, events: {id: ev}, recurring: {id: r} }
+
+function createLocalStore() {
+  const KEY = "famcal.v1";
+  let st = ls.get(KEY, null);
+  if (!st || !st.family) st = { family: defaultFamily(), days: {}, events: {}, recurring: {} };
+  let listener = () => {};
+  const persist = () => { ls.set(KEY, st); listener(); };
+  return {
+    mode: "local", ready: Promise.resolve(),
+    get state() { return st; },
+    onChange(fn) { listener = fn; },
+    setDay(key, pid, entry) {
+      const d = st.days[key] || { shifts: {} };
+      if (entry) d.shifts[pid] = clean(entry); else delete d.shifts[pid];
+      if (Object.keys(d.shifts).length) st.days[key] = d; else delete st.days[key];
+      persist();
+    },
+    saveEvent(ev) { ev = clean(ev); if (!ev.id) ev.id = rid(); st.events[ev.id] = ev; persist(); },
+    deleteEvent(id) { delete st.events[id]; persist(); },
+    saveRecurring(r) { r = clean(r); if (!r.id) r.id = rid(); st.recurring[r.id] = r; persist(); },
+    deleteRecurring(id) { delete st.recurring[id]; persist(); },
+    saveFamily(patch) { Object.assign(st.family, clean(patch)); persist(); },
+    stop() {}
+  };
+}
+
+let fb = null; // { auth, db, A (auth fn), F (firestore fn) }
+
+async function loadFirebase() {
+  const base = `https://www.gstatic.com/firebasejs/${FB_VERSION}`;
+  const [appM, A, F] = await Promise.all([
+    import(`${base}/firebase-app.js`), import(`${base}/firebase-auth.js`), import(`${base}/firebase-firestore.js`)
+  ]);
+  const app = appM.initializeApp(FIREBASE_CONFIG);
+  const auth = A.getAuth(app);
+  let db;
+  try {
+    db = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) });
+  } catch (e) { db = F.getFirestore(app); }
+  return { auth, db, A, F };
+}
+
+function createCloudStore(fid) {
+  const { F, db } = fb;
+  const famRef = F.doc(db, "families", fid);
+  const st = { family: null, days: {}, events: {}, recurring: {} };
+  let listener = () => {};
+  const unsubs = [];
+  let resolveReady, rejectReady;
+  const ready = new Promise((res, rej) => { resolveReady = res; rejectReady = rej; });
+  const onErr = e => { console.error(e); rejectReady(e); if (st.family) toast("Errore di sincronizzazione"); };
+
+  unsubs.push(F.onSnapshot(famRef, s => {
+    if (!s.exists()) { rejectReady(new Error("missing")); return; }
+    st.family = s.data(); resolveReady(); listener();
+  }, onErr));
+  for (const col of ["days", "events", "recurring"]) {
+    unsubs.push(F.onSnapshot(F.collection(famRef, col), qs => {
+      qs.docChanges().forEach(ch => {
+        if (ch.type === "removed") delete st[col][ch.doc.id];
+        else st[col][ch.doc.id] = { ...ch.doc.data(), ...(col === "days" ? {} : { id: ch.doc.id }) };
+      });
+      listener();
+    }, onErr));
+  }
+  const w = p => p.catch(e => { console.error(e); toast("Salvataggio non riuscito: " + (e.code || e.message)); });
+  return {
+    mode: "cloud", ready, fid,
+    get state() { return st; },
+    onChange(fn) { listener = fn; },
+    setDay(key, pid, entry) {
+      const val = entry
+        ? { s: entry.s || F.deleteField(), n: entry.n || F.deleteField() }
+        : F.deleteField();
+      w(F.setDoc(F.doc(famRef, "days", key), { shifts: { [pid]: val } }, { merge: true }));
+    },
+    saveEvent(ev) {
+      const id = ev.id || F.doc(F.collection(famRef, "events")).id;
+      w(F.setDoc(F.doc(famRef, "events", id), clean({ ...ev, id })));
+    },
+    deleteEvent(id) { w(F.deleteDoc(F.doc(famRef, "events", id))); },
+    saveRecurring(r) {
+      const id = r.id || F.doc(F.collection(famRef, "recurring")).id;
+      w(F.setDoc(F.doc(famRef, "recurring", id), clean({ ...r, id })));
+    },
+    deleteRecurring(id) { w(F.deleteDoc(F.doc(famRef, "recurring", id))); },
+    saveFamily(patch) { w(F.updateDoc(famRef, clean(patch))); },
+    stop() { unsubs.forEach(u => u()); }
+  };
+}
+
+// ---------------- Stato UI ----------------
+let store = null;
+const today = new Date();
+const todayKey = keyOf(today.getFullYear(), today.getMonth(), today.getDate());
+let viewY = today.getFullYear(), viewM = today.getMonth();
+let hiddenPeople = new Set(ls.get("famcal.hidden", []));
+let memoItems = new Map(), memoIssues = new Map();
+
+const S = () => store.state;
+const fam = () => S().family || defaultFamily();
+const people = () => fam().people || [];
+const settings = () => fam().settings || {};
+const personById = id => people().find(p => p.id === id);
+const shiftPerson = () => personById(settings().shiftPerson);
+const shiftOf = (key, pid) => (S().days[key] && S().days[key].shifts && S().days[key].shifts[pid]) || null;
+const visible = pid => !hiddenPeople.has(pid);
+const personColor = pid => (personById(pid) || {}).color || "#9ca3af";
+const personName = pid => (personById(pid) || {}).name || "?";
+
+function clearMemo() { memoItems = new Map(); memoIssues = new Map(); }
+
+function itemsOn(key) {
+  if (memoItems.has(key)) return memoItems.get(key);
+  const out = [];
+  const dow = dowOfNum(dayNum(key));
+  for (const e of Object.values(S().events)) if (e.date === key) out.push({ ...e, kind: "event" });
+  for (const r of Object.values(S().recurring)) {
+    if (!(r.days || []).includes(dow)) continue;
+    if (r.from && key < r.from) continue;
+    if (r.until && key > r.until) continue;
+    if ((r.skip || []).includes(key)) continue;
+    out.push({ ...r, kind: "rec", date: key });
+  }
+  out.sort((a, b) => (a.start || "").localeCompare(b.start || ""));
+  memoItems.set(key, out);
+  return out;
+}
+
+// Intervalli in cui una persona è impegnata, per i giorni n-1, n, n+1
+function busyIntervals(pid, n) {
+  const out = [];
+  const sp = settings().shiftPerson, hours = settings().shiftHours || {};
+  for (let k = n - 1; k <= n + 1; k++) {
+    const key = keyFromNum(k);
+    if (pid === sp) {
+      const e = shiftOf(key, pid);
+      const hr = e && e.s && hours[e.s];
+      if (hr && hr[0] && hr[1]) out.push({ iv: span(k, hr[0], hr[1]), label: `turno ${SHIFT_BY_ID[e.s].label.toLowerCase()} ${hr[0]}–${hr[1]}` });
+    }
+    for (const it of itemsOn(key)) {
+      if (it.pid === pid && it.start && it.end) out.push({ iv: span(k, it.start, it.end), label: `${it.title} ${it.start}–${it.end}` });
+    }
+  }
+  return out;
+}
+
+// Fasce del giorno in cui serve almeno un adulto libero
+function issuesFor(key) {
+  if (memoIssues.has(key)) return memoIssues.get(key);
+  const n = dayNum(key), dow = dowOfNum(n);
+  const adults = people().filter(p => p.role === "adult");
+  const res = [];
+  if (adults.length) {
+    const wins = [];
+    for (const w of settings().windows || []) {
+      if ((w.days || []).includes(dow) && w.start && w.end) wins.push({ label: w.label || "Fascia", time: `${w.start}–${w.end}`, iv: span(n, w.start, w.end) });
+    }
+    for (const it of itemsOn(key)) {
+      const p = personById(it.pid);
+      if (p && p.role === "child" && it.needsAdult !== false && it.start && it.end) {
+        wins.push({ label: `${p.name}: ${it.title}`, time: `${it.start}–${it.end}`, iv: span(n, it.start, it.end) });
+      }
+    }
+    if (wins.length) {
+      const busy = adults.map(a => ({ a, b: busyIntervals(a.id, n) }));
+      for (const w of wins) {
+        const blockers = busy.map(({ a, b }) => {
+          const hit = b.find(x => x.iv[0] < w.iv[1] && w.iv[0] < x.iv[1]);
+          return hit ? `${a.name}: ${hit.label}` : null;
+        });
+        if (blockers.every(Boolean)) res.push({ ...w, blockers });
+      }
+    }
+  }
+  memoIssues.set(key, res);
+  return res;
+}
+
+// ---------------- Render principale ----------------
+const grid = $("grid");
+
+function render() {
+  if (!store || !S().family) return;
+  $("monthLabel").textContent = `${MONTHS[viewM]} ${viewY}`;
+  renderFilters();
+  grid.innerHTML = "";
+  const first = new Date(viewY, viewM, 1);
+  const offset = (first.getDay() + 6) % 7;
+  const daysIn = new Date(viewY, viewM + 1, 0).getDate();
+  const hol = holidays(viewY);
+  const sp = shiftPerson();
+  const showShift = sp && visible(sp.id);
+  const counts = {}, notes = [], issueDays = [];
+
+  for (let i = 0; i < offset; i++) grid.appendChild(h("div", { class: "cell empty" }));
+  for (let d = 1; d <= daysIn; d++) {
+    const k = keyOf(viewY, viewM, d);
+    const dow = new Date(viewY, viewM, d).getDay();
+    const cell = h("div", { class: "cell", "data-key": k }, h("span", { class: "num" }, d));
+    if (dow === 0 || hol.has(k)) cell.classList.add("holiday");
+    if (k === todayKey) cell.classList.add("today");
+
+    const entry = sp ? shiftOf(k, sp.id) : null;
+    const s = entry && entry.s && SHIFT_BY_ID[entry.s];
+    if (s) counts[s.id] = (counts[s.id] || 0) + 1;
+    if (entry && entry.n) notes.push({ k, d, dow, n: entry.n });
+    if (showShift && s) {
+      cell.classList.add("has-shift");
+      cell.style.background = s.bg; cell.style.color = s.fg; cell.style.borderColor = s.bg;
+      cell.appendChild(h("span", { class: "code" }, s.id));
+    }
+    if (showShift && entry && entry.n) {
+      if (!s) cell.classList.add("only-note");
+      cell.appendChild(h("span", { class: "note-txt" }, entry.n));
+    } else if (showShift && s) {
+      cell.appendChild(h("span", { class: "lbl" }, s.label));
+    }
+
+    const pids = [...new Set(itemsOn(k).map(it => it.pid))].filter(visible).slice(0, 5);
+    if (pids.length) cell.appendChild(h("div", { class: "dots" }, pids.map(p => h("i", { style: `background:${personColor(p)}` }))));
+
+    const iss = issuesFor(k);
+    if (iss.length) {
+      cell.classList.add("alert");
+      cell.appendChild(h("span", { class: "warn" }, "⚠️"));
+      issueDays.push({ k, d, dow, iss });
+    }
+    grid.appendChild(cell);
+  }
+  const trailing = (7 - ((offset + daysIn) % 7)) % 7;
+  for (let i = 0; i < trailing; i++) grid.appendChild(h("div", { class: "cell empty" }));
+
+  // Giorni scoperti
+  $("issuesCard").hidden = !issueDays.length;
+  $("issuesList").replaceChildren(...issueDays.map(x => h("li", { "data-key": x.k },
+    h("span", { class: "d" }, `${DAYS[x.dow].slice(0, 3)} ${x.d}`),
+    h("span", { class: "t" }, x.iss.map(i => `${i.label} ${i.time}`).join(" · ")))));
+
+  // Riepilogo turni
+  $("summaryCard").hidden = !sp;
+  if (sp) {
+    $("summaryTitle").textContent = `Turni di ${sp.name}`;
+    $("summary").replaceChildren(...SHIFTS.map(s => h("span", {
+      class: "chip", style: `background:${s.bg};color:${s.fg};opacity:${counts[s.id] ? 1 : .45}`
+    }, s.label, " ", h("b", {}, counts[s.id] || 0))));
+  }
+  $("notesCard").hidden = !notes.length;
+  $("notesList").replaceChildren(...notes.map(x => h("li", { "data-key": x.k },
+    h("span", { class: "d" }, `${DAYS[x.dow].slice(0, 3)} ${x.d}`), h("span", { class: "t" }, x.n))));
+
+  $("quickBtn").hidden = !sp;
+  if (openDayKey) refreshDayDynamic();
+}
+
+function renderFilters() {
+  $("filters").replaceChildren(...people().map(p => h("button", {
+    class: "fchip" + (visible(p.id) ? "" : " off"),
+    onclick: () => {
+      if (hiddenPeople.has(p.id)) hiddenPeople.delete(p.id); else hiddenPeople.add(p.id);
+      ls.set("famcal.hidden", [...hiddenPeople]); render();
+    }
+  }, h("i", { style: `background:${p.color}` }), p.name)));
+}
+
+// ---------------- Sheets ----------------
+const backdrop = $("backdrop");
+const sheetStack = [];
+function openSheet(el) { if (!sheetStack.includes(el)) sheetStack.push(el); el.classList.add("open"); backdrop.classList.add("open"); }
+function closeSheet(el) {
+  el = el || sheetStack[sheetStack.length - 1];
+  if (!el) return;
+  if (document.activeElement) document.activeElement.blur();
+  el.classList.remove("open");
+  const i = sheetStack.indexOf(el); if (i >= 0) sheetStack.splice(i, 1);
+  if (!sheetStack.length) backdrop.classList.remove("open");
+  if (el === $("daySheet")) openDayKey = null;
+}
+backdrop.addEventListener("click", () => closeSheet());
+
+// ---------------- Giorno ----------------
+let openDayKey = null;
+
+function dayTitle(key) {
+  const [y, m, d] = key.split("-").map(Number);
+  return `${DAYS[new Date(y, m - 1, d).getDay()]} ${d} ${MONTHS[m - 1]} ${y}`;
+}
+
+function openDay(key) {
+  openDayKey = key;
+  const sheet = $("daySheet");
+  const sp = shiftPerson();
+  const entry = sp ? (shiftOf(key, sp.id) || {}) : {};
+  let sel = entry.s || null;
+
+  const shiftBtns = SHIFTS.map(s => h("button", {
+    class: "shift-btn", "data-id": s.id, style: `background:${s.bg};color:${s.fg}`,
+    onclick: () => pick(s.id)
+  }, h("span", { class: "c" }, s.id), s.label));
+  const noBtn = h("button", { class: "clear-btn", onclick: () => pick(null) }, "Nessun turno");
+  function pick(id) {
+    sel = id;
+    shiftBtns.forEach(b => b.classList.toggle("sel", b.dataset.id === id));
+    noBtn.classList.toggle("sel", id === null);
+  }
+  const note = h("textarea", { placeholder: "Nota sul turno (es. cambio con collega)", value: entry.n || "" });
+
+  const shiftSection = sp ? [
+    h("h4", {}, `Turno di ${sp.name}`),
+    h("div", { class: "shift-grid" }, shiftBtns), noBtn,
+    h("label", { class: "field-lbl" }, "Nota sul turno"), note
+  ] : [];
+
+  sheet.replaceChildren(
+    h("div", { class: "grab" }),
+    h("h3", {}, dayTitle(key)),
+    h("div", { id: "dayIssues" }),
+    h("h4", {}, "Impegni e attività"),
+    h("div", { id: "dayItems" }),
+    h("button", { class: "add-btn", onclick: () => openItemForm({ key }) }, "+ Aggiungi impegno"),
+    ...shiftSection,
+    h("div", { class: "actions" },
+      h("button", { class: "btn", onclick: () => closeSheet(sheet) }, sp ? "Annulla" : "Chiudi"),
+      sp ? h("button", { class: "btn pri", onclick: () => {
+        const n = note.value.trim();
+        store.setDay(key, sp.id, (sel || n) ? { s: sel, n } : null);
+        closeSheet(sheet);
+      } }, "Salva turno") : null)
+  );
+  pick(sel);
+  refreshDayDynamic();
+  sheet.scrollTop = 0;
+  openSheet(sheet);
+}
+
+function refreshDayDynamic() {
+  const key = openDayKey;
+  const iBox = $("dayIssues"), list = $("dayItems");
+  if (!key || !iBox) return;
+  iBox.replaceChildren(...issuesFor(key).map(i => h("div", { class: "issue" },
+    h("b", {}, `⚠️ ${i.label} ${i.time}`), " — nessun adulto libero",
+    h("div", {}, i.blockers.join(" · ")))));
+  const items = itemsOn(key);
+  list.replaceChildren(items.length ? h("div", {}, items.map(it => h("div", {
+    class: "item", onclick: () => openItemForm({ key, item: it })
+  },
+    h("span", { class: "bar", style: `background:${personColor(it.pid)}` }),
+    h("span", { class: "time" }, it.start ? `${it.start}${it.end ? "–" + it.end : ""}` : "tutto il giorno"),
+    h("span", { class: "body" },
+      h("div", { class: "tt" }, it.title),
+      h("div", { class: "ss" }, personName(it.pid), it.kind === "rec" ? " · ↻ ogni settimana" : "", it.note ? " · " + it.note : "")))))
+    : h("div", { class: "muted" }, "Nessun impegno."));
+}
+
+// ---------------- Form impegno ----------------
+function openItemForm({ key, item }) {
+  const sheet = $("itemSheet");
+  const isNew = !item;
+  const isRec = item && item.kind === "rec";
+  const src = item ? (isRec ? S().recurring[item.id] : S().events[item.id]) || item : {};
+  let pid = src.pid || ls.get("famcal.lastPid", null) || (people()[0] || {}).id;
+  if (!personById(pid)) pid = (people()[0] || {}).id;
+  const baseDow = key ? dowOfNum(dayNum(key)) : 1;
+  let days = new Set(src.days || [baseDow]);
+  let repeat = isRec;
+
+  const title = h("input", { type: "text", placeholder: "Cosa (es. Cantiere, Palestra, Nuoto)", value: src.title || "" });
+  const start = h("input", { type: "time", value: src.start || "" });
+  const end = h("input", { type: "time", value: src.end || "" });
+  const note = h("textarea", { placeholder: "Note (facoltative)", value: src.note || "" });
+  const needs = h("input", { type: "checkbox", checked: src.needsAdult !== false });
+  const needsRow = h("label", { class: "check" }, needs, "Serve un adulto che accompagni o sia a casa");
+  const until = h("input", { type: "date", value: src.until || "" });
+  const repeatCb = h("input", { type: "checkbox", checked: repeat });
+
+  const pchips = people().map(p => h("button", {
+    class: "pchip", style: `color:${p.color}`, "data-id": p.id, onclick: () => setPid(p.id)
+  }, h("i", { style: `background:${p.color}` }), h("span", { style: "color:var(--text)" }, p.name)));
+  function setPid(id) {
+    pid = id;
+    pchips.forEach(b => b.classList.toggle("sel", b.dataset.id === id));
+    needsRow.hidden = (personById(id) || {}).role !== "child";
+  }
+  const preset = (label, s, e) => h("button", { class: "preset", onclick: () => { start.value = s; end.value = e; } }, label);
+
+  const wdBtns = WD_ORDER.map(d => h("button", {
+    class: days.has(d) ? "sel" : "", onclick: ev => { days.has(d) ? days.delete(d) : days.add(d); ev.currentTarget.classList.toggle("sel"); }
+  }, WD_SHORT[d]));
+  const repeatBox = h("div", {},
+    h("label", { class: "field-lbl" }, "Giorni della settimana"), h("div", { class: "wd" }, wdBtns),
+    h("label", { class: "field-lbl" }, "Fino al (facoltativo)"), until);
+  repeatBox.hidden = !repeat;
+  repeatCb.addEventListener("change", () => { repeat = repeatCb.checked; repeatBox.hidden = !repeat; });
+
+  function save() {
+    const t = title.value.trim();
+    if (!t) { toast("Scrivi cosa è l'impegno"); title.focus(); return; }
+    let s = start.value, e = end.value;
+    if (s && !e) e = fromMin(toMin(s) + 60);
+    if (!s) e = "";
+    const p = personById(pid);
+    const base = { pid, title: t, start: s, end: e, note: note.value.trim(),
+      needsAdult: p && p.role === "child" ? needs.checked : null };
+    ls.set("famcal.lastPid", pid);
+    if (repeat) {
+      if (!days.size) { toast("Scegli almeno un giorno"); return; }
+      store.saveRecurring({ ...(isRec ? src : {}), ...base, days: [...days], until: until.value || "",
+        from: (isRec ? src.from : key) || todayKey, skip: (isRec ? src.skip : []) || [] });
+    } else {
+      store.saveEvent({ ...(isNew ? {} : src), ...base, date: src.date || key });
+    }
+    closeSheet(sheet);
+  }
+
+  const delActions = [];
+  if (!isNew && !isRec) delActions.push(h("button", { class: "btn danger", onclick: () => {
+    if (confirm("Eliminare questo impegno?")) { store.deleteEvent(src.id); closeSheet(sheet); }
+  } }, "Elimina impegno"));
+  if (isRec && key) delActions.push(h("button", { class: "btn danger", onclick: () => {
+    store.saveRecurring({ ...src, skip: [...(src.skip || []), key] }); closeSheet(sheet); toast("Saltato solo per questo giorno");
+  } }, `Salta solo il ${Number(key.slice(8))}`));
+  if (isRec) delActions.push(h("button", { class: "btn danger", onclick: () => {
+    if (confirm("Eliminare tutta l'attività ricorrente?")) { store.deleteRecurring(src.id); closeSheet(sheet); }
+  } }, "Elimina tutta la serie"));
+
+  sheet.replaceChildren(
+    h("div", { class: "grab" }),
+    h("h3", {}, isNew ? "Nuovo impegno" : isRec ? "Attività ricorrente" : "Impegno"),
+    key && !isRec ? h("div", { class: "muted" }, dayTitle(key)) : null,
+    h("label", { class: "field-lbl" }, "Per chi"), h("div", { class: "pchips" }, pchips),
+    h("label", { class: "field-lbl" }, "Cosa"), title,
+    h("label", { class: "field-lbl" }, "Orario (vuoto = tutto il giorno)"),
+    h("div", { class: "row" }, start, h("span", {}, "→"), end),
+    h("div", { class: "presets" },
+      preset("🌙 Notte 22–06", "22:00", "06:00"), preset("Giornata 08–17", "08:00", "17:00"),
+      preset("Pomeriggio 14–18", "14:00", "18:00"),
+      h("button", { class: "preset", onclick: () => { start.value = ""; end.value = ""; } }, "Tutto il giorno")),
+    h("div", { class: "hint" }, "Se l'orario di fine è prima dell'inizio, l'impegno prosegue fino al giorno dopo (es. notte in cantiere)."),
+    needsRow,
+    isNew ? h("label", { class: "check" }, repeatCb, "Ripeti ogni settimana") : null,
+    repeatBox,
+    h("label", { class: "field-lbl" }, "Note"), note,
+    h("div", { class: "actions" },
+      h("button", { class: "btn", onclick: () => closeSheet(sheet) }, "Annulla"),
+      h("button", { class: "btn pri", onclick: save }, "Salva")),
+    delActions.length ? h("div", { class: "stack", style: "margin-top:8px" }, delActions) : null
+  );
+  setPid(pid);
+  sheet.scrollTop = 0;
+  openSheet(sheet);
+}
+
+// ---------------- Menu / impostazioni ----------------
+function openMenu() {
+  const sheet = $("menuSheet");
+  let ppl = clean(people());
+  let st = clean(settings());
+  st.shiftHours = st.shiftHours || {};
+  st.windows = st.windows || [];
+
+  const peopleBox = h("div");
+  const spSelect = h("select", { style: "width:100%" });
+  function drawPeople() {
+    peopleBox.replaceChildren(...ppl.map((p, i) => h("div", { class: "set-row" },
+      h("input", { type: "color", value: p.color, oninput: e => { p.color = e.target.value; } }),
+      h("input", { type: "text", value: p.name, oninput: e => { p.name = e.target.value; drawSp(); } }),
+      h("select", { onchange: e => { p.role = e.target.value; } },
+        Object.entries(ROLES).map(([v, l]) => h("option", { value: v, selected: p.role === v }, l))),
+      h("button", { class: "x", title: "Rimuovi", onclick: () => {
+        if (!confirm(`Rimuovere ${p.name}? I suoi impegni resteranno ma senza colore.`)) return;
+        ppl.splice(i, 1); drawPeople(); drawSp();
+      } }, "✕"))));
+  }
+  function drawSp() {
+    spSelect.replaceChildren(h("option", { value: "" }, "— nessuno —"),
+      ...ppl.map(p => h("option", { value: p.id, selected: st.shiftPerson === p.id }, p.name)));
+  }
+  spSelect.addEventListener("change", () => { st.shiftPerson = spSelect.value; });
+  drawPeople(); drawSp();
+
+  const hoursBox = h("div", {}, TIMED_SHIFTS.map(id => {
+    const hr = st.shiftHours[id] || ["", ""];
+    st.shiftHours[id] = hr;
+    return h("div", { class: "set-row" },
+      h("span", { style: "width:92px;font-weight:600" }, SHIFT_BY_ID[id].label),
+      h("input", { type: "time", value: hr[0], style: "flex:1", oninput: e => { hr[0] = e.target.value; } }),
+      h("span", {}, "→"),
+      h("input", { type: "time", value: hr[1], style: "flex:1", oninput: e => { hr[1] = e.target.value; } }));
+  }));
+
+  const winBox = h("div");
+  function drawWins() {
+    winBox.replaceChildren(...st.windows.map((w, i) => h("div", { class: "win" },
+      h("div", { class: "set-row" },
+        h("input", { type: "text", value: w.label, placeholder: "Nome (es. Uscita scuola)", oninput: e => { w.label = e.target.value; } }),
+        h("button", { class: "x", onclick: () => { st.windows.splice(i, 1); drawWins(); } }, "✕")),
+      h("div", { class: "set-row" },
+        h("input", { type: "time", value: w.start, style: "flex:1", oninput: e => { w.start = e.target.value; } }),
+        h("span", {}, "→"),
+        h("input", { type: "time", value: w.end, style: "flex:1", oninput: e => { w.end = e.target.value; } })),
+      h("div", { class: "wd" }, WD_ORDER.map(d => h("button", {
+        class: (w.days || []).includes(d) ? "sel" : "",
+        onclick: ev => {
+          w.days = w.days || [];
+          const j = w.days.indexOf(d); j >= 0 ? w.days.splice(j, 1) : w.days.push(d);
+          ev.currentTarget.classList.toggle("sel");
+        }
+      }, WD_SHORT[d]))))));
+  }
+  drawWins();
+
+  const recs = Object.values(S().recurring).sort((a, b) => (a.pid + a.title).localeCompare(b.pid + b.title));
+  const recList = recs.length ? h("div", {}, recs.map(r => h("div", {
+    class: "item", onclick: () => openItemForm({ key: null, item: { ...r, kind: "rec" } })
+  },
+    h("span", { class: "bar", style: `background:${personColor(r.pid)}` }),
+    h("span", { class: "time" }, r.start ? `${r.start}–${r.end}` : "tutto il g."),
+    h("span", { class: "body" }, h("div", { class: "tt" }, r.title),
+      h("div", { class: "ss" }, personName(r.pid), " · ", WD_ORDER.filter(d => (r.days || []).includes(d)).map(d => WD_SHORT[d]).join(" "),
+        r.until ? ` · fino al ${r.until.split("-").reverse().join("/")}` : "")))))
+    : h("div", { class: "muted" }, "Nessuna. Si aggiungono da un giorno qualsiasi, spuntando \"Ripeti ogni settimana\".");
+
+  const familySection = store.mode === "cloud" ? [
+    h("h4", {}, "Famiglia condivisa"),
+    h("div", { class: "muted" }, "Codice da dare all'altro genitore per unirsi:"),
+    h("div", { class: "code-box" }, store.fid),
+    h("div", { class: "stack", style: "margin-top:8px" },
+      h("button", { class: "btn", onclick: () => shareCode(store.fid) }, "Condividi codice"),
+      h("div", { class: "muted" }, "Accesso come ", fb.auth.currentUser ? fb.auth.currentUser.email : ""),
+      h("button", { class: "btn danger", onclick: () => { closeSheet(sheet); fb.A.signOut(fb.auth); } }, "Esci dall'account"))
+  ] : [
+    h("h4", {}, "Modalità prova"),
+    h("div", { class: "hint" }, "I dati sono salvati solo su questo telefono. Per condividere il calendario con la famiglia segui la guida LEGGIMI: basta configurare Firebase una volta.")
+  ];
+
+  sheet.replaceChildren(
+    h("div", { class: "grab" }),
+    h("h3", {}, "Impostazioni"),
+    ...familySection,
+    h("h4", {}, "Persone"), peopleBox,
+    h("button", { class: "add-btn", onclick: () => {
+      ppl.push({ id: "p" + rid(), name: "Nuova persona", color: PALETTE[ppl.length % PALETTE.length], role: "adult" });
+      drawPeople(); drawSp();
+    } }, "+ Aggiungi persona"),
+    h("div", { class: "hint" }, "Il controllo di copertura considera gli Adulti: segnala quando nessun adulto è libero in una fascia da coprire o durante un'attività di un figlio."),
+    h("h4", {}, "Chi fa i turni"), spSelect,
+    h("h4", {}, "Orari dei turni (per la copertura)"), hoursBox,
+    h("h4", {}, "Fasce da coprire"), winBox,
+    h("button", { class: "add-btn", onclick: () => {
+      st.windows.push({ id: "w" + rid(), label: "Uscita scuola", start: "16:00", end: "16:30", days: [1, 2, 3, 4, 5] }); drawWins();
+    } }, "+ Aggiungi fascia"),
+    h("div", { class: "actions" }, h("button", { class: "btn pri", onclick: () => {
+      ppl = ppl.filter(p => p.name.trim());
+      store.saveFamily({ people: ppl, settings: st });
+      toast("Impostazioni salvate"); closeSheet(sheet);
+    } }, "Salva impostazioni")),
+    h("h4", {}, "Attività ricorrenti"), recList,
+    h("h4", {}, "Backup"),
+    h("div", { class: "stack" },
+      h("button", { class: "btn", onclick: exportBackup }, "⬇️ Esporta backup (.json)"),
+      h("button", { class: "btn", onclick: () => $("fileInput").click() }, "⬆️ Importa backup (anche dalla vecchia app turni)")),
+    h("div", { class: "actions" }, h("button", { class: "btn", onclick: () => closeSheet(sheet) }, "Chiudi"))
+  );
+  sheet.scrollTop = 0;
+  openSheet(sheet);
+}
+
+async function shareCode(code) {
+  const text = `Codice per il nostro calendario di famiglia: ${code}`;
+  try {
+    if (navigator.share) await navigator.share({ text });
+    else { await navigator.clipboard.writeText(code); toast("Codice copiato"); }
+  } catch (e) {}
+}
+
+function exportBackup() {
+  const st = S();
+  const data = { app: "famcal", version: 1, exported: new Date().toISOString(),
+    family: { name: fam().name, people: people(), settings: settings() },
+    days: st.days, events: st.events, recurring: st.recurring };
+  const a = h("a", { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })),
+    download: `calendario-famiglia-${todayKey}.json` });
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  toast("Backup esportato");
+}
+
+$("fileInput").addEventListener("change", () => {
+  const f = $("fileInput").files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const p = JSON.parse(r.result);
+      if (p.app === "famcal") {
+        if (!confirm("Importare il backup? Le voci con lo stesso giorno/ID verranno sovrascritte.")) return;
+        if (p.family) store.saveFamily({ people: p.family.people, settings: p.family.settings });
+        for (const [k, v] of Object.entries(p.days || {})) for (const [pid, e] of Object.entries(v.shifts || {})) store.setDay(k, pid, e);
+        Object.values(p.events || {}).forEach(e => store.saveEvent(e));
+        Object.values(p.recurring || {}).forEach(e => store.saveRecurring(e));
+        toast("Backup importato");
+      } else {
+        // vecchia app turni: { app:"turni", data: { "2026-10-03": {s,n} } }
+        const sp = shiftPerson();
+        if (!sp) { toast("Prima scegli nelle impostazioni chi fa i turni"); return; }
+        const data = p.data || p;
+        let n = 0;
+        for (const [k, v] of Object.entries(data)) {
+          if (/^\d{4}-\d{2}-\d{2}$/.test(k) && v && (v.s || v.n)) { store.setDay(k, sp.id, v); n++; }
+        }
+        toast(`Importati ${n} giorni di turni di ${sp.name}`);
+      }
+      closeSheet($("menuSheet"));
+    } catch (e) { toast("File non valido"); }
+    $("fileInput").value = "";
+  };
+  r.readAsText(f);
+});
+
+// ---------------- Interazioni calendario ----------------
+grid.addEventListener("click", e => {
+  if (quickMode) return;
+  const c = e.target.closest(".cell");
+  if (c && c.dataset.key) openDay(c.dataset.key);
+});
+for (const id of ["issuesList", "notesList"]) {
+  $(id).addEventListener("click", e => { const li = e.target.closest("li"); if (li) openDay(li.dataset.key); });
+}
+function shiftMonth(delta) {
+  viewM += delta;
+  if (viewM < 0) { viewM = 11; viewY--; }
+  if (viewM > 11) { viewM = 0; viewY++; }
+  render();
+}
+$("prev").addEventListener("click", () => shiftMonth(-1));
+$("next").addEventListener("click", () => shiftMonth(1));
+$("title").addEventListener("click", () => { viewY = today.getFullYear(); viewM = today.getMonth(); render(); });
+$("menuBtn").addEventListener("click", openMenu);
+
+let tx = 0, ty = 0;
+grid.addEventListener("touchstart", e => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, { passive: true });
+grid.addEventListener("touchend", e => {
+  if (quickMode) return;
+  const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+  if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) shiftMonth(dx < 0 ? 1 : -1);
+}, { passive: true });
+
+// ---------------- Pennello ----------------
+let quickMode = false, brush = null, painting = false, painted = new Set();
+const brushGrid = $("brushGrid");
+SHIFTS.forEach(s => brushGrid.appendChild(h("button", { class: "brush", "data-id": s.id, title: s.label, style: `background:${s.bg};color:${s.fg}` }, s.id)));
+brushGrid.appendChild(h("button", { class: "brush eraser", "data-id": "ERASE", title: "Gomma" }, "⌫"));
+brushGrid.addEventListener("click", e => {
+  const b = e.target.closest(".brush"); if (!b) return;
+  brush = b.dataset.id;
+  brushGrid.querySelectorAll(".brush").forEach(x => x.classList.toggle("sel", x === b));
+  $("brushHint").textContent = brush === "ERASE" ? "Gomma: tocca i giorni per togliere il turno"
+    : `${SHIFT_BY_ID[brush].label}: tocca o trascina sui giorni`;
+});
+function setQuick(on) {
+  quickMode = on;
+  document.body.classList.toggle("quick", on);
+  $("quickBtn").classList.toggle("active", on);
+  if (on) {
+    const sp = shiftPerson();
+    if (sp && hiddenPeople.has(sp.id)) { hiddenPeople.delete(sp.id); ls.set("famcal.hidden", [...hiddenPeople]); render(); }
+  }
+}
+$("quickBtn").addEventListener("click", () => setQuick(!quickMode));
+$("quickDone").addEventListener("click", () => setQuick(false));
+
+function paintKey(k, toggle) {
+  const sp = shiftPerson(); if (!sp) return;
+  const e = { ...(shiftOf(k, sp.id) || {}) };
+  if (brush === "ERASE") delete e.s;
+  else if (toggle && e.s === brush) delete e.s;
+  else e.s = brush;
+  store.setDay(k, sp.id, (e.s || e.n) ? { s: e.s || null, n: e.n || "" } : null);
+}
+function cellAt(x, y) {
+  const el = document.elementFromPoint(x, y);
+  const c = el && el.closest && el.closest(".cell");
+  return c && c.dataset.key ? c : null;
+}
+grid.addEventListener("pointerdown", e => {
+  if (!quickMode) return;
+  if (!brush) { toast("Prima scegli un turno in basso"); return; }
+  const c = cellAt(e.clientX, e.clientY); if (!c) return;
+  e.preventDefault();
+  try { grid.setPointerCapture(e.pointerId); } catch (_) {}
+  painting = true; painted = new Set([c.dataset.key]);
+  paintKey(c.dataset.key, true);
+});
+grid.addEventListener("pointermove", e => {
+  if (!painting) return;
+  const c = cellAt(e.clientX, e.clientY);
+  if (!c || painted.has(c.dataset.key)) return;
+  painted.add(c.dataset.key);
+  paintKey(c.dataset.key, false);
+});
+const endPaint = () => { painting = false; };
+window.addEventListener("pointerup", endPaint);
+window.addEventListener("pointercancel", endPaint);
+
+// ---------------- Schermate e avvio ----------------
+function showScreen(name) {
+  $("loading").hidden = true;
+  $("authScreen").hidden = name !== "auth";
+  $("setupScreen").hidden = name !== "setup";
+  $("app").hidden = name !== "app";
+  if (name !== "app") { setQuick(false); sheetStack.slice().forEach(s => closeSheet(s)); }
+}
+
+function startStore(s) {
+  if (store) store.stop();
+  store = s;
+  store.onChange(() => { clearMemo(); render(); });
+  clearMemo();
+}
+
+const AUTH_ERR = {
+  "auth/invalid-credential": "Email o password non corretti.",
+  "auth/wrong-password": "Password non corretta.",
+  "auth/user-not-found": "Nessun account con questa email.",
+  "auth/email-already-in-use": "Esiste già un account con questa email: usa Accedi.",
+  "auth/weak-password": "La password deve avere almeno 6 caratteri.",
+  "auth/invalid-email": "Email non valida.",
+  "auth/network-request-failed": "Nessuna connessione. Riprova quando sei online.",
+  "auth/too-many-requests": "Troppi tentativi, riprova tra qualche minuto."
+};
+const authMsg = e => AUTH_ERR[e.code] || (e.code || e.message);
+
+async function enterFamily(user, fid) {
+  ls.set("famcal.fid." + user.uid, fid);
+  startStore(createCloudStore(fid));
+  try {
+    await store.ready;
+    $("banner").hidden = true;
+    showScreen("app"); render();
+  } catch (e) {
+    console.error(e);
+    store.stop(); store = null;
+    ls.set("famcal.fid." + user.uid, null);
+    $("setupErr").textContent = "Non riesco ad aprire la famiglia: controlla il codice o le regole di Firestore.";
+    showScreen("setup");
+  }
+}
+
+function bindAuthUI() {
+  const { A, F, auth, db } = fb;
+  const email = () => $("authEmail").value.trim(), pass = () => $("authPass").value;
+  const err = m => { $("authErr").textContent = m || ""; };
+  $("loginBtn").onclick = async () => { err(); try { await A.signInWithEmailAndPassword(auth, email(), pass()); } catch (e) { err(authMsg(e)); } };
+  $("signupBtn").onclick = async () => { err(); try { await A.createUserWithEmailAndPassword(auth, email(), pass()); } catch (e) { err(authMsg(e)); } };
+  $("resetBtn").onclick = async () => {
+    if (!email()) { err("Scrivi prima la tua email."); return; }
+    try { await A.sendPasswordResetEmail(auth, email()); err(); toast("Ti abbiamo mandato un'email per reimpostare la password"); } catch (e) { err(authMsg(e)); }
+  };
+  $("setupLogout").onclick = () => A.signOut(auth);
+
+  $("createFamBtn").onclick = async () => {
+    const user = auth.currentUser; if (!user) return;
+    $("setupErr").textContent = "";
+    try {
+      const ref = await F.addDoc(F.collection(db, "families"), {
+        ...defaultFamily(), name: $("famName").value.trim() || "La nostra famiglia",
+        members: [user.uid], createdAt: Date.now()
+      });
+      await F.setDoc(F.doc(db, "users", user.uid), { familyId: ref.id });
+      await enterFamily(user, ref.id);
+      toast("Famiglia creata! Personalizza persone e orari dal menu ⋯");
+    } catch (e) { $("setupErr").textContent = "Errore: " + (e.code || e.message); }
+  };
+  $("joinBtn").onclick = async () => {
+    const user = auth.currentUser; if (!user) return;
+    const code = $("joinCode").value.trim();
+    if (!code) { $("setupErr").textContent = "Inserisci il codice."; return; }
+    $("setupErr").textContent = "";
+    try {
+      await F.updateDoc(F.doc(db, "families", code), { members: F.arrayUnion(user.uid) });
+      await F.setDoc(F.doc(db, "users", user.uid), { familyId: code });
+      await enterFamily(user, code);
+      toast("Sei entrato nella famiglia");
+    } catch (e) {
+      $("setupErr").textContent = e.code === "not-found" ? "Codice non trovato." : "Errore: " + (e.code || e.message);
+    }
+  };
+}
+
+async function boot() {
+  if (!FIREBASE_CONFIG) {
+    startStore(createLocalStore());
+    $("banner").hidden = false;
+    $("banner").textContent = "Modalità prova: i dati restano su questo telefono. Per condividerli con la famiglia segui la guida LEGGIMI.";
+    showScreen("app"); render();
+    return;
+  }
+  try { fb = await loadFirebase(); }
+  catch (e) {
+    $("loading").textContent = "Impossibile caricare l'app: al primo avvio serve la connessione a internet.";
+    return;
+  }
+  bindAuthUI();
+  fb.A.onAuthStateChanged(fb.auth, async user => {
+    if (!user) { if (store) { store.stop(); store = null; } showScreen("auth"); return; }
+    let fid = ls.get("famcal.fid." + user.uid, null);
+    try {
+      const snap = await fb.F.getDoc(fb.F.doc(fb.db, "users", user.uid));
+      fid = snap.exists() ? snap.data().familyId : null;
+    } catch (e) { /* offline: uso il codice salvato */ }
+    if (fid) await enterFamily(user, fid); else showScreen("setup");
+  });
+}
+
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+boot();
+</script>
+</body>
+</html>
